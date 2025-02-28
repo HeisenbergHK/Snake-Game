@@ -10,12 +10,14 @@ WIDTH, HEIGHT = BOARD_SIZE * CELL_SIZE, BOARD_SIZE * CELL_SIZE
 SNAKE_COLOR = (0, 255, 0)
 FOOD_COLOR = (255, 0, 0)
 BACKGROUND_COLOR = (0, 0, 0)
+TEXT_COLOR = (255, 255, 255)
 
 # Initialize Pygame
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Snake Game")
 clock = pygame.time.Clock()
+font = pygame.font.Font(None, 36)
 
 # Database Setup
 conn = sqlite3.connect("snake_game.db")
@@ -24,7 +26,9 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS game_records (
     game_id TEXT PRIMARY KEY,
     board_size INTEGER,
-    result TEXT
+    result TEXT,
+    score INTEGER,
+    time_elapsed REAL
 )
 """)
 cursor.execute("""
@@ -54,6 +58,7 @@ class SnakeGame:
         self.running = True
         self.score = 0
         self.step = 0
+        self.start_time = pygame.time.get_ticks()
         self.game_id = datetime.now().strftime("%Y%m%d%H%M%S")
     
     def place_food(self):
@@ -71,9 +76,11 @@ class SnakeGame:
         
         if new_head in self.snake or not (0 <= new_head[0] < BOARD_SIZE and 0 <= new_head[1] < BOARD_SIZE):
             self.running = False
-            cursor.execute("INSERT INTO game_records (game_id, board_size, result) VALUES (?, ?, ?)",
-                           (self.game_id, BOARD_SIZE, "Lost"))
+            time_elapsed = (pygame.time.get_ticks() - self.start_time) / 1000.0
+            cursor.execute("INSERT INTO game_records (game_id, board_size, result, score, time_elapsed) VALUES (?, ?, ?, ?, ?)",
+                           (self.game_id, BOARD_SIZE, "Lost", self.score, time_elapsed))
             conn.commit()
+            self.show_message("Game Over")
             return
         
         self.snake.insert(0, new_head)
@@ -89,9 +96,11 @@ class SnakeGame:
         
         if len(self.snake) == BOARD_SIZE * BOARD_SIZE:
             self.running = False
-            cursor.execute("INSERT INTO game_records (game_id, board_size, result) VALUES (?, ?, ?)",
-                           (self.game_id, BOARD_SIZE, "Won"))
+            time_elapsed = (pygame.time.get_ticks() - self.start_time) / 1000.0
+            cursor.execute("INSERT INTO game_records (game_id, board_size, result, score, time_elapsed) VALUES (?, ?, ?, ?, ?)",
+                           (self.game_id, BOARD_SIZE, "Won", self.score, time_elapsed))
             conn.commit()
+            self.show_message("You Win!")
         
         self.direction = None  # Reset direction after each move
 
@@ -104,7 +113,22 @@ class SnakeGame:
         for segment in self.snake:
             pygame.draw.rect(screen, SNAKE_COLOR, (segment[0] * CELL_SIZE, segment[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         pygame.draw.rect(screen, FOOD_COLOR, (self.food[0] * CELL_SIZE, self.food[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+        
+        # Display score and time
+        elapsed_time = (pygame.time.get_ticks() - self.start_time) / 1000.0
+        score_text = font.render(f"Score: {self.score}", True, TEXT_COLOR)
+        time_text = font.render(f"Time: {elapsed_time:.1f}s", True, TEXT_COLOR)
+        screen.blit(score_text, (10, 10))
+        screen.blit(time_text, (10, 40))
+        
         pygame.display.flip()
+
+    def show_message(self, message):
+        screen.fill(BACKGROUND_COLOR)
+        text = font.render(message, True, TEXT_COLOR)
+        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2 - text.get_height() // 2))
+        pygame.display.flip()
+        pygame.time.delay(3000)
 
 
 def main():
