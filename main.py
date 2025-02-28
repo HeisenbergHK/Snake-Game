@@ -49,7 +49,7 @@ def save_game_state(game_id, step, snake, food, action):
 class SnakeGame:
     def __init__(self):
         self.snake = [(BOARD_SIZE // 2, BOARD_SIZE // 2)]
-        self.direction = (0, -1)  # Initially moving up
+        self.direction = None  # Initially no movement
         self.food = self.place_food()
         self.running = True
         self.score = 0
@@ -63,6 +63,9 @@ class SnakeGame:
                 return food
 
     def move(self):
+        if self.direction is None:
+            return  # Do nothing if no direction is set
+        
         head = self.snake[0]
         new_head = (head[0] + self.direction[0], head[1] + self.direction[1])
         
@@ -89,9 +92,11 @@ class SnakeGame:
             cursor.execute("INSERT INTO game_records (game_id, board_size, result) VALUES (?, ?, ?)",
                            (self.game_id, BOARD_SIZE, "Won"))
             conn.commit()
+        
+        self.direction = None  # Reset direction after each move
 
     def change_direction(self, direction):
-        if (direction[0] != -self.direction[0] or direction[1] != -self.direction[1]):
+        if (self.direction is None) or (direction[0] != -self.direction[0] or direction[1] != -self.direction[1]):
             self.direction = direction
 
     def draw(self):
