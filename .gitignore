@@ -1,2 +1,4 @@
 .venv
+.vscode
 snake_game.db
+/__pycache__/

@@ -2,6 +2,8 @@ import pygame
 import random
 import sqlite3
 from datetime import datetime
+import time
+from A_star import a_star_search  # Import external A* search function
 
 # Game Constants
 BOARD_SIZE = 10  # Flexible board size
@@ -16,7 +18,6 @@ TEXT_COLOR = (255, 255, 255)
 pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Snake Game")
-clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
 
 # Database Setup
@@ -51,8 +52,9 @@ def save_game_state(game_id, step, snake, food, action):
     conn.commit()
 
 class SnakeGame:
-    def __init__(self):
+    def __init__(self, mode):
         self.snake = [(BOARD_SIZE // 2, BOARD_SIZE // 2)]
+        self.head = self.snake[0]
         self.direction = None  # Initially no movement
         self.food = self.place_food()
         self.running = True
@@ -60,6 +62,8 @@ class SnakeGame:
         self.step = 0
         self.start_time = pygame.time.get_ticks()
         self.game_id = datetime.now().strftime("%Y%m%d%H%M%S")
+        self.mode = mode
+
     
     def place_food(self):
         while True:
@@ -67,20 +71,24 @@ class SnakeGame:
             if food not in self.snake:
                 return food
 
+    def get_board(self):
+        board = [[0 for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
+        for segment in self.snake:
+            board[segment[1]][segment[0]] = 1
+        board[self.food[1]][self.food[0]] = 2
+        return board
+
     def move(self):
         if self.direction is None:
-            return  # Do nothing if no direction is set
+            return  # Do nothing if no direction is given
         
         head = self.snake[0]
         new_head = (head[0] + self.direction[0], head[1] + self.direction[1])
-        
+        print(new_head)
+
         if new_head in self.snake or not (0 <= new_head[0] < BOARD_SIZE and 0 <= new_head[1] < BOARD_SIZE):
-            self.running = False
-            time_elapsed = (pygame.time.get_ticks() - self.start_time) / 1000.0
-            cursor.execute("INSERT INTO game_records (game_id, board_size, result, score, time_elapsed) VALUES (?, ?, ?, ?, ?)",
-                           (self.game_id, BOARD_SIZE, "Lost", self.score, time_elapsed))
-            conn.commit()
             self.show_message("Game Over")
+            self.running = False
             return
         
         self.snake.insert(0, new_head)
@@ -95,18 +103,10 @@ class SnakeGame:
         self.step += 1
         
         if len(self.snake) == BOARD_SIZE * BOARD_SIZE:
-            self.running = False
-            time_elapsed = (pygame.time.get_ticks() - self.start_time) / 1000.0
-            cursor.execute("INSERT INTO game_records (game_id, board_size, result, score, time_elapsed) VALUES (?, ?, ?, ?, ?)",
-                           (self.game_id, BOARD_SIZE, "Won", self.score, time_elapsed))
-            conn.commit()
             self.show_message("You Win!")
+            self.running = False
         
         self.direction = None  # Reset direction after each move
-
-    def change_direction(self, direction):
-        if (self.direction is None) or (direction[0] != -self.direction[0] or direction[1] != -self.direction[1]):
-            self.direction = direction
 
     def draw(self):
         screen.fill(BACKGROUND_COLOR)
@@ -114,12 +114,12 @@ class SnakeGame:
             pygame.draw.rect(screen, SNAKE_COLOR, (segment[0] * CELL_SIZE, segment[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         pygame.draw.rect(screen, FOOD_COLOR, (self.food[0] * CELL_SIZE, self.food[1] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
         
-        # Display score and time
-        elapsed_time = (pygame.time.get_ticks() - self.start_time) / 1000.0
+        # Display Score and Timer
+        elapsed_time = (pygame.time.get_ticks() - self.start_time) // 1000
         score_text = font.render(f"Score: {self.score}", True, TEXT_COLOR)
-        time_text = font.render(f"Time: {elapsed_time:.1f}s", True, TEXT_COLOR)
+        time_text = font.render(f"Time: {elapsed_time}s", True, TEXT_COLOR)
         screen.blit(score_text, (10, 10))
-        screen.blit(time_text, (10, 40))
+        screen.blit(time_text, (WIDTH - 150, 10))
         
         pygame.display.flip()
 
@@ -130,29 +130,74 @@ class SnakeGame:
         pygame.display.flip()
         pygame.time.delay(3000)
 
+def calculate_direction(current_pos, nex_pos): 
+    dif = (nex_pos[0] - current_pos[0], nex_pos[1] - current_pos[1])
+
+    return None if dif == (0, 0) else dif
+
+    if dif == (0, -1):
+        return (0, -1) # up
+    elif dif == (0, 1):
+        return (0, 1) #down
+    # elif dif == (1, 0):
+    #     return (1, 0) #left
+    # elif dif == (0, -1):
+    #     return (-1, 0) #right
+    elif dif == (0, 0):
+        return None #stay
+    else:
+        return dif
 
 def main():
-    game = SnakeGame()
+    mode = input("Select mode:\n1) manual\n2) ai\n-- ").strip().lower()
+    if mode == "1":
+        mode = "manual"
+    elif mode == "2":
+        mode = "ai"
+    else:
+        print("Invalid mode selected. Exiting.")
+        return
+
+    game = SnakeGame(mode)
+    path = []
+    
     while game.running:
+        # Process events to keep the window responsive
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game.running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    game.change_direction((0, -1))
-                elif event.key == pygame.K_DOWN:
-                    game.change_direction((0, 1))
-                elif event.key == pygame.K_LEFT:
-                    game.change_direction((-1, 0))
-                elif event.key == pygame.K_RIGHT:
-                    game.change_direction((1, 0))
-        
+
+        if mode == "manual":
+            # Handle manual input
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_UP]:
+                game.direction = (0, -1)
+            elif keys[pygame.K_DOWN]:
+                game.direction = (0, 1)
+            elif keys[pygame.K_LEFT]:
+                game.direction = (-1, 0)
+            elif keys[pygame.K_RIGHT]:
+                game.direction = (1, 0)
+        else:  # AI mode
+            # Use A* algorithm to determine the next move
+            if path:
+                dir = calculate_direction(game.snake[0], path[0])
+                game.direction = dir  # Take the first step from the A* path
+                path.pop(0)
+            else:
+                board = game.get_board()
+                path = a_star_search(grid=board, snake_body=game.snake, head_position=game.snake[0], goal_position=game.food)
+
+        # Move the snake and redraw the screen
         game.move()
         game.draw()
-        clock.tick(10)
+
+        # Add a small delay to make the game playable
+        pygame.time.delay(100)  # Adjust the delay as needed
     
     pygame.quit()
     conn.close()
 
 if __name__ == "__main__":
     main()
+
