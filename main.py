@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pygame
 
-from A_star import a_star_search  # Import external A* search function
+from A_star import a_star_search, get_best_direction
 
 # Game Constants
 BOARD_SIZE = 10  # Flexible board size
@@ -209,6 +209,16 @@ def main():
                     head_position=game.snake[0],
                     goal_position=game.food,
                 )
+
+                # If no path exists, try to move in a direction that maximizes reachable area
+                if not path:
+                    best_dir = get_best_direction(board, game.snake, game.food)
+                    if best_dir:
+                        game.direction = best_dir
+                    else:
+                        # No valid move available; end the game
+                        game.show_message("Trapped!")
+                        game.running = False
 
         # Move the snake and redraw the screen
         game.move()

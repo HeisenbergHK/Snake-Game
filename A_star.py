@@ -90,6 +90,78 @@ def a_star_search(grid: np.ndarray, head_position, snake_body, goal_position):
     # NO PATH FOUND
     return None
 
+def flood_fill_reachable_area(grid, start_position, snake_body):
+    """
+    Calculate the number of reachable empty cells using Flood Fill.
+    """
+    rows, cols = len(grid), len(grid[0])
+    visited = set()
+
+    def dfs(r, c):
+        if (
+            r < 0
+            or r >= rows
+            or c < 0
+            or c >= cols
+            or (r, c) in snake_body
+            or (r, c) in visited
+            or grid[r][c] != 0
+        ):
+            return 0
+        visited.add((r, c))
+        count = 1
+        count += dfs(r + 1, c)
+        count += dfs(r - 1, c)
+        count += dfs(r, c + 1)
+        count += dfs(r, c - 1)
+        return count
+
+    return dfs(start_position[0], start_position[1])
+
+
+def get_best_direction(board, snake, food):
+    """
+    Determine the best direction for the snake to move when no direct path exists.
+    """
+    head = snake[0]
+    possible_directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    max_reachable = -1
+    best_direction = None
+
+    for direction in possible_directions:
+        new_head = (head[0] + direction[0], head[1] + direction[1])
+
+        # Skip invalid moves
+        if (
+            new_head in snake
+            or not (0 <= new_head[0] < len(board))
+            or not (0 <= new_head[1] < len(board[0]))
+        ):
+            continue
+
+        # Temporarily update the board and snake
+        temp_snake = snake.copy()
+        temp_snake.insert(0, new_head)
+        temp_snake.pop()  # Remove tail
+
+        # Calculate reachable area
+        temp_board = [[cell for cell in row] for row in board]
+        reachable = flood_fill_reachable_area(temp_board, new_head, set(temp_snake))
+
+        # Select the direction with the largest reachable area
+        if reachable > max_reachable:
+            max_reachable = reachable
+            best_direction = direction
+
+    return best_direction
+
+
+def calculate_direction(current_pos, next_pos):
+    """
+    Calculate the direction vector between two positions.
+    """
+    dif = (next_pos[0] - current_pos[0], next_pos[1] - current_pos[1])
+    return None if dif == (0, 0) else dif
 
 if __name__ == "__main__":
 
